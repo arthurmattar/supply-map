@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa de Operadores — Supply</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Courier New', monospace; background: #0d1117; color: #c9d1d9; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  #header { padding: 10px 20px; background: #0d1117; border-bottom: 1px solid #21262d; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  #header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #58a6ff; }
+  #count-badge { font-size: 11px; color: #484f58; letter-spacing: 0.05em; }
+  #count-badge span { color: #3fb950; font-weight: 700; }
+
+  #main { display: flex; flex: 1; overflow: hidden; }
+
+  #sidebar { width: 288px; flex-shrink: 0; background: #0d1117; border-right: 1px solid #21262d; display: flex; flex-direction: column; overflow: hidden; }
+
+  .panel-section { padding: 14px 16px; border-bottom: 1px solid #21262d; }
+  .panel-label { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #484f58; margin-bottom: 8px; }
+
+  select, input[type="text"] {
+    width: 100%; background: #161b22; border: 1px solid #30363d; color: #c9d1d9;
+    font-family: 'Courier New', monospace; font-size: 13px; padding: 8px 10px;
+    border-radius: 4px; outline: none; letter-spacing: 0.04em; margin-bottom: 0px;
+    transition: border-color 0.15s; appearance: none; -webkit-appearance: none;
+  }
+  select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23484f58'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; cursor: pointer; }
+  select:focus, input[type="text"]:focus { border-color: #58a6ff; }
+  input[type="text"]::placeholder { color: #484f58; }
+  select option { background: #161b22; color: #c9d1d9; }
+
+  input[type="text"] { margin-bottom: 8px; }
+
+  button.primary { width: 100%; background: #1f6feb; border: none; color: #fff; font-family: 'Courier New', monospace; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; padding: 8px; border-radius: 4px; cursor: pointer; transition: background 0.15s; }
+  button.primary:hover { background: #388bfd; }
+  button.primary:disabled { background: #21262d; color: #484f58; cursor: default; }
+
+  #cep-status { font-size: 11px; margin-top: 6px; min-height: 14px; color: #484f58; }
+  #cep-status.ok { color: #3fb950; }
+  #cep-status.err { color: #f85149; }
+  #cep-status.loading { color: #58a6ff; }
+
+  .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 11px; color: #8b949e; }
+  .leg-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .leg-ring { width: 14px; height: 8px; border-radius: 50%; flex-shrink: 0; border-width: 1.5px; border-style: solid; }
+
+  #list-header { padding: 10px 16px 4px; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #484f58; flex-shrink: 0; }
+  #stats-list { flex: 1; overflow-y: auto; }
+  #stats-list::-webkit-scrollbar { width: 4px; }
+  #stats-list::-webkit-scrollbar-track { background: #0d1117; }
+  #stats-list::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
+
+  .stat-item { padding: 8px 16px; border-bottom: 1px solid #161b22; cursor: pointer; transition: background 0.1s; }
+  .stat-item:hover { background: #161b22; }
+  .stat-item.hidden { display: none; }
+  .stat-city { font-size: 11px; color: #c9d1d9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat-cep { font-size: 10px; color: #484f58; margin-top: 2px; letter-spacing: 0.06em; }
+  .stat-tags { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 3px; }
+  .tag { font-size: 9px; padding: 1px 5px; border-radius: 3px; background: #21262d; color: #8b949e; letter-spacing: 0.04em; }
+  .tag.match { background: #1a2d1a; color: #3fb950; border: 1px solid #1f4a1f; }
+
+  #no-results { display: none; padding: 20px 16px; font-size: 12px; color: #484f58; text-align: center; line-height: 1.6; }
+
+  #map { flex: 1; }
+  .custom-pin { background: #1f6feb; border: 2px solid #58a6ff; border-radius: 50%; width: 10px !important; height: 10px !important; margin-left: -5px !important; margin-top: -5px !important; box-shadow: 0 0 0 3px rgba(88,166,255,0.2); }
+  .custom-pin.faded { background: #21262d !important; border-color: #30363d !important; box-shadow: none !important; }
+  .user-pin { background: #f0883e; border: 2px solid #ffa657; border-radius: 50%; width: 14px !important; height: 14px !important; margin-left: -7px !important; margin-top: -7px !important; box-shadow: 0 0 0 4px rgba(240,136,62,0.25); }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>Supply — Cobertura de Operadores</h1>
+  <div id="count-badge">mostrando <span id="visible-count">68</span> de 68 pontos</div>
+</div>
+
+<div id="main">
+  <div id="sidebar">
+
+    <div class="panel-section">
+      <div class="panel-label">Tipo de Resíduo</div>
+      <select id="residuo-filter" onchange="applyFilter()">
+        <option value="">— Todos os resíduos —</option>
+        <option>Bateria</option>
+        <option>Cascas de Coco</option>
+        <option>Contaminantes</option>
+        <option>Efluente</option>
+        <option>Equipamentos eletrônicos (computadores)</option>
+        <option>Limpeza Urbana Biodegradável</option>
+        <option>Lâmpada Fluorescente</option>
+        <option>Líquido</option>
+        <option>Madeira</option>
+        <option>Metais</option>
+        <option>Não Reciclável</option>
+        <option>Não Reciclável (Não Especificado)</option>
+        <option>Orgânico</option>
+        <option>Papelão</option>
+        <option>Plástico</option>
+        <option>Podas</option>
+        <option>RCC (Classe I)</option>
+        <option>RCC (Classe II)</option>
+        <option>Reciclável</option>
+        <option>Rejeito</option>
+        <option>Stretch</option>
+        <option>Sucata Ferrosa</option>
+        <option>Sucata Metálica</option>
+        <option>Vidro</option>
+        <option>Óleo Alimentar</option>
+      </select>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-label">Buscar CEP</div>
+      <input id="cep-input" type="text" placeholder="00000-000" maxlength="9" autocomplete="off"/>
+      <button class="primary" onclick="searchCEP()">Gerar PIN ↵</button>
+      <div id="cep-status"></div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-label">Legenda</div>
+      <div class="legend-item"><div class="leg-dot" style="background:#1f6feb;border:1.5px solid #58a6ff;"></div>Operador ativo</div>
+      <div class="legend-item"><div class="leg-dot" style="background:#21262d;border:1.5px solid #30363d;opacity:.5;"></div>Fora do filtro</div>
+      <div class="legend-item"><div class="leg-ring" style="background:rgba(31,111,235,0.08);border-color:#58a6ff;"></div>Raio 100 km</div>
+      <div class="legend-item"><div class="leg-dot" style="background:#f0883e;border:1.5px solid #ffa657;"></div>PIN buscado</div>
+    </div>
+
+    <div id="list-header">Operadores</div>
+    <div id="stats-list"></div>
+    <div id="no-results">Nenhum operador atende<br>esse tipo de resíduo.</div>
+
+  </div>
+
+  <div id="map"></div>
+</div>
+
+<script>
+const POINTS = [
+  {cep:"36020-180",addr:"Rua Delorme Louzada, 87 — Juiz de Fora/MG",lat:-21.7624,lon:-43.3503,residuos:["Não Reciclável"]},
+  {cep:"37506-899",addr:"Área Rural — Itajubá/MG",lat:-22.4284,lon:-45.4528,residuos:["Não Reciclável","Reciclável"]},
+  {cep:"87065-021",addr:"Rod. PR-317 — Maringá/PR",lat:-23.4272,lon:-51.9375,residuos:["Não Reciclável"]},
+  {cep:"29107-022",addr:"Rua Tenente Santana — Vila Velha/ES",lat:-20.3500,lon:-40.2919,residuos:["Não Reciclável","Reciclável"]},
+  {cep:"59570-000",addr:"Ceará-Mirim/RN",lat:-5.6333,lon:-35.4333,residuos:["Não Reciclável"]},
+  {cep:"27998-000",addr:"Rod. BR-101 — Carapebus/RJ",lat:-22.1872,lon:-41.6624,residuos:["Não Reciclável"]},
+  {cep:"72120-055",addr:"Quadra CND 5 — Taguatinga/DF",lat:-15.8310,lon:-48.0440,residuos:["Madeira","Não Reciclável","Orgânico","Papelão","Plástico","Reciclável","Rejeito"]},
+  {cep:"22775-111",addr:"Estrada dos Bandeirantes — Rio de Janeiro/RJ",lat:-22.9245,lon:-43.4153,residuos:["Não Reciclável"]},
+  {cep:"81350-000",addr:"Rua João Bettega — Curitiba/PR",lat:-25.5132,lon:-49.3421,residuos:["Não Reciclável","Reciclável"]},
+  {cep:"04170-030",addr:"Rua Girolamo Dai Libri — São Paulo/SP",lat:-23.6165,lon:-46.6237,residuos:["Contaminantes","Madeira","Não Reciclável","Papelão","RCC (Classe I)","RCC (Classe II)"]},
+  {cep:"14078-900",addr:"Av. Thomaz Whately — Ribeirão Preto/SP",lat:-21.1704,lon:-47.7893,residuos:["Não Reciclável"]},
+  {cep:"74919-408",addr:"Rua Gonçalo Bezerra — Aparecida de Goiânia/GO",lat:-16.8175,lon:-49.2437,residuos:["Não Reciclável"]},
+  {cep:"52061-030",addr:"Rua Silveira Lobo — Recife/PE",lat:-8.0422,lon:-34.9089,residuos:["Não Reciclável"]},
+  {cep:"71250-410",addr:"Setor SCIA Q12 — Brasília/DF",lat:-15.8203,lon:-48.0140,residuos:["Bateria","Lâmpada Fluorescente","Não Reciclável","Reciclável"]},
+  {cep:"20920-310",addr:"Rua Capitão Félix — Rio de Janeiro/RJ",lat:-22.8972,lon:-43.2369,residuos:["Não Reciclável","Reciclável"]},
+  {cep:"86055-630",addr:"Rua Ernâni Lacerda — Londrina/PR",lat:-23.2703,lon:-51.1558,residuos:["Não Reciclável","Reciclável"]},
+  {cep:"05319-000",addr:"Av. Queiroz Filho — São Paulo/SP",lat:-23.5276,lon:-46.7275,residuos:["Não Reciclável","Reciclável"]},
+  {cep:"13187-042",addr:"Rua das Acácias — Hortolândia/SP",lat:-22.8572,lon:-47.2211,residuos:["Não Reciclável","Reciclável"]},
+  {cep:"02323-000",addr:"Rua Ushikichi Kamiya — São Paulo/SP",lat:-23.4853,lon:-46.6471,residuos:["Cascas de Coco","Limpeza Urbana Biodegradável","Madeira","Não Reciclável","Orgânico","Papelão","Podas","RCC (Classe I)","Reciclável","Rejeito","Sucata Metálica"]},
+  {cep:"05347-010",addr:"Av. Kenkiti Simomoto — São Paulo/SP",lat:-23.5347,lon:-46.7618,residuos:["RCC (Classe I)","RCC (Classe II)"]},
+  {cep:"06460-060",addr:"Rua João F. de Camargo — Barueri/SP",lat:-23.5033,lon:-46.8756,residuos:["Efluente","Lâmpada Fluorescente","Líquido","Madeira","Metais","Não Reciclável","Orgânico","Papelão","Podas","RCC (Classe I)","RCC (Classe II)","Reciclável","Rejeito","Sucata Ferrosa","Sucata Metálica","Vidro"]},
+  {cep:"57072-445",addr:"Rua Projetada 458 — Maceió/AL",lat:-9.5950,lon:-35.7731,residuos:["Não Reciclável"]},
+  {cep:"67110-290",addr:"Av. Ricardo Borges — Ananindeua/PA",lat:-1.3745,lon:-48.3766,residuos:["Contaminantes","Não Reciclável","Reciclável"]},
+  {cep:"49080-010",addr:"Rua Acre — Aracaju/SE",lat:-10.9322,lon:-37.0706,residuos:["Não Reciclável"]},
+  {cep:"95112-086",addr:"Rua Diego Gonzalez — Caxias do Sul/RS",lat:-29.1597,lon:-51.1791,residuos:["Não Reciclável"]},
+  {cep:"01311-927",addr:"Av. Paulista — São Paulo/SP",lat:-23.5632,lon:-46.6541,residuos:["Não Reciclável","Reciclável"]},
+  {cep:"79044-140",addr:"Av. Dr. Paulo Bernard — Campo Grande/MS",lat:-20.4901,lon:-54.6219,residuos:["Não Reciclável","Reciclável"]},
+  {cep:"90650-001",addr:"Av. Bento Gonçalves — Porto Alegre/RS",lat:-30.0506,lon:-51.1840,residuos:["Não Reciclável"]},
+  {cep:"31720-090",addr:"Rua Coronel Leri Santos — Belo Horizonte/MG",lat:-19.8526,lon:-43.9427,residuos:["Não Reciclável"]},
+  {cep:"84043-735",addr:"Av. Continental — Ponta Grossa/PR",lat:-25.1087,lon:-50.1693,residuos:["Não Reciclável"]},
+  {cep:"41315-060",addr:"Rua dos Carmelitas — Salvador/BA",lat:-12.9262,lon:-38.4116,residuos:["Não Reciclável"]},
+  {cep:"96050-500",addr:"Rod. BR-392 — Pelotas/RS",lat:-31.8023,lon:-52.3359,residuos:["Não Reciclável"]},
+  {cep:"60874-401",addr:"Rod. Quarto Anel Viário — Fortaleza/CE",lat:-3.8668,lon:-38.5428,residuos:["Não Reciclável","Reciclável"]},
+  {cep:"13610-238",addr:"Av. Carlos Bonfanti — Leme/SP",lat:-22.1830,lon:-47.3901,residuos:["Não Reciclável"]},
+  {cep:"17020-351",addr:"Rua Gomes Berriel Filho — Bauru/SP",lat:-22.3291,lon:-49.0841,residuos:["Não Reciclável","Reciclável"]},
+  {cep:"73340-030",addr:"Conjunto SOF — Planaltina/DF",lat:-15.6158,lon:-47.6502,residuos:["Reciclável"]},
+  {cep:"20011-000",addr:"Rua da Assembléia — Rio de Janeiro/RJ",lat:-22.9024,lon:-43.1731,residuos:["Não Reciclável","Reciclável"]},
+  {cep:"83327-076",addr:"Rua Jaguariaíva — Pinhais/PR",lat:-25.4422,lon:-49.1521,residuos:["Contaminantes","Não Reciclável","Reciclável"]},
+  {cep:"72006-180",addr:"Setor Hab. Vicente Pires — Brasília/DF",lat:-15.8001,lon:-48.0330,residuos:["Não Reciclável"]},
+  {cep:"73100-540",addr:"Núcleo Rural Lago Oeste — Brasília/DF",lat:-15.6528,lon:-47.8019,residuos:["Orgânico"]},
+  {cep:"07220-040",addr:"Rua Colônia Leopoldina — Guarulhos/SP",lat:-23.4378,lon:-46.4754,residuos:["Não Reciclável","Reciclável"]},
+  {cep:"72660-321",addr:"Quadra 511 — Recanto das Emas/DF",lat:-15.9072,lon:-48.0643,residuos:["RCC (Classe I)","RCC (Classe II)"]},
+  {cep:"06407-000",addr:"Estrada Dr. Cícero Borges — Barueri/SP",lat:-23.5274,lon:-46.8822,residuos:["Efluente","Equipamentos eletrônicos (computadores)","Não Reciclável","RCC (Classe I)"]},
+  {cep:"06268-120",addr:"Av. Roberto Pinto Sobrinho — Osasco/SP",lat:-23.5316,lon:-46.7929,residuos:["Papelão","Reciclável"]},
+  {cep:"06529-350",addr:"Rua Hiroshi Okada — Santana de Parnaíba/SP",lat:-23.4436,lon:-46.9185,residuos:["Papelão","Reciclável"]},
+  {cep:"03322-001",addr:"Rua Azevedo Soares — São Paulo/SP",lat:-23.5482,lon:-46.5793,residuos:["Limpeza Urbana Biodegradável","Madeira","Orgânico","Podas","RCC (Classe I)","RCC (Classe II)","Sucata Metálica"]},
+  {cep:"96050-480",addr:"Rua Lauro Ribeiro — Pelotas/RS",lat:-31.7954,lon:-52.3302,residuos:["Não Reciclável"]},
+  {cep:"29107-240",addr:"Rua Alan Kardec — Vila Velha/ES",lat:-20.3617,lon:-40.2881,residuos:["Não Reciclável","Não Reciclável (Não Especificado)","Reciclável"]},
+  {cep:"81480-140",addr:"Rua Antônio Gai — Curitiba/PR",lat:-25.5734,lon:-49.3512,residuos:["Não Reciclável"]},
+  {cep:"41820-560",addr:"Rua Soldado Luiz Gonzaga — Salvador/BA",lat:-12.9891,lon:-38.4522,residuos:["Não Reciclável"]},
+  {cep:"36020-280",addr:"Rua Duque de Caxias — Juiz de Fora/MG",lat:-21.7641,lon:-43.3560,residuos:["Não Reciclável"]},
+  {cep:"54495-235",addr:"Rua Guepardo — Jaboatão dos Guararapes/PE",lat:-8.1764,lon:-34.9306,residuos:["Papelão","Reciclável","Stretch"]},
+  {cep:"04293-040",addr:"Rua Henrique Neri Ramos — São Paulo/SP",lat:-23.6237,lon:-46.6351,residuos:["RCC (Classe II)"]},
+  {cep:"06340-380",addr:"Rua Eduardo A. Mesquita — Carapicuíba/SP",lat:-23.5274,lon:-46.8393,residuos:["Orgânico","Reciclável"]},
+  {cep:"59147-850",addr:"Av. Manoel Martins — Parnamirim/RN",lat:-5.9229,lon:-35.2633,residuos:["Não Reciclável"]},
+  {cep:"37600-000",addr:"Av. José Alves Cardoso — Cambuí/MG",lat:-22.6163,lon:-46.0713,residuos:["Não Reciclável","Reciclável"]},
+  {cep:"04474-340",addr:"Estrada do Alvarenga — São Paulo/SP",lat:-23.7124,lon:-46.6543,residuos:["RCC (Classe II)"]},
+  {cep:"72006-203",addr:"Setor Hab. Vicente Pires B — Brasília/DF",lat:-15.8017,lon:-48.0228,residuos:["RCC (Classe II)"]},
+  {cep:"04764-050",addr:"Rua Augusto Ferreira — São Paulo/SP",lat:-23.7032,lon:-46.6774,residuos:["Madeira"]},
+  {cep:"02140-000",addr:"Av. Jaci Toledo — São Paulo/SP",lat:-23.4987,lon:-46.6219,residuos:["Não Reciclável"]},
+  {cep:"14075-090",addr:"Rua Itu — Ribeirão Preto/SP",lat:-21.1801,lon:-47.8052,residuos:["Óleo Alimentar"]},
+  {cep:"65130-000",addr:"Paço do Lumiar/MA",lat:-2.5286,lon:-44.1047,residuos:["Óleo Alimentar"]},
+  {cep:"87306-625",addr:"Av. João Ribeiro Haenisch — Campo Mourão/PR",lat:-24.0451,lon:-52.3809,residuos:["Óleo Alimentar"]},
+  {cep:"78163-899",addr:"Área Rural — Várzea Grande/MT",lat:-15.6533,lon:-56.1327,residuos:["Óleo Alimentar"]},
+  {cep:"32372-090",addr:"Rua Beta — Contagem/MG",lat:-19.9312,lon:-44.0782,residuos:["Óleo Alimentar"]},
+  {cep:"17023-013",addr:"Rua Margarida Genaro — Bauru/SP",lat:-22.3436,lon:-49.0754,residuos:["Óleo Alimentar"]},
+  {cep:"03701-001",addr:"Av. Gabriela Mistral — São Paulo/SP",lat:-23.5277,lon:-46.5449,residuos:["Óleo Alimentar"]},
+];
+
+const map = L.map('map', { center: [-15.5, -52], zoom: 5, zoomControl: true, attributionControl: false });
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
+L.control.attribution({ prefix: '© OpenStreetMap · CartoDB' }).addTo(map);
+
+const dotIcon   = L.divIcon({ className: 'custom-pin', iconSize: [10,10] });
+const fadedIcon = L.divIcon({ className: 'custom-pin faded', iconSize: [10,10] });
+const userIcon  = L.divIcon({ className: 'user-pin', iconSize: [14,14] });
+
+const listEl   = document.getElementById('stats-list');
+const noRes    = document.getElementById('no-results');
+const countEl  = document.getElementById('visible-count');
+
+function buildPopup(p, highlight) {
+  const tags = p.residuos.map(r => {
+    const m = highlight && r === highlight ? ' match' : '';
+    return `<span class="tag${m}" style="display:inline-block;margin:1px 2px;">${r}</span>`;
+  }).join('');
+  return `<div style="font-family:'Courier New',monospace;font-size:11px;line-height:1.6;background:#0d1117;color:#c9d1d9;padding:4px 6px;border-radius:4px;min-width:190px;max-width:240px;">
+    <b style="color:#58a6ff;font-size:12px;">${p.cep}</b><br>
+    <span style="color:#8b949e;">${p.addr}</span><br>
+    <div style="margin-top:5px;">${tags}</div>
+  </div>`;
+}
+
+const layers = POINTS.map((p, i) => {
+  const circle = L.circle([p.lat, p.lon], {
+    radius: 100000, color: '#58a6ff', weight: 1, opacity: 0.4,
+    fillColor: '#1f6feb', fillOpacity: 0.06
+  }).addTo(map);
+
+  const marker = L.marker([p.lat, p.lon], { icon: dotIcon }).addTo(map);
+  marker.bindPopup(buildPopup(p, null), { className: 'dark-popup' });
+
+  const item = document.createElement('div');
+  item.className = 'stat-item';
+  item.innerHTML = `
+    <div class="stat-city">${p.addr}</div>
+    <div class="stat-cep">${p.cep}</div>
+    <div class="stat-tags">${p.residuos.map(r => `<span class="tag">${r}</span>`).join('')}</div>`;
+  item.onclick = () => { map.flyTo([p.lat, p.lon], 9, { duration: 0.8 }); marker.openPopup(); };
+  listEl.appendChild(item);
+
+  return { p, circle, marker, item };
+});
+
+function applyFilter() {
+  const sel = document.getElementById('residuo-filter').value;
+  let visible = 0;
+
+  layers.forEach(({ p, circle, marker, item }) => {
+    const match = !sel || p.residuos.includes(sel);
+    if (match) {
+      marker.setIcon(dotIcon);
+      marker.setOpacity(1);
+      circle.setStyle({ color: '#58a6ff', opacity: 0.4, fillColor: '#1f6feb', fillOpacity: 0.06 });
+      item.classList.remove('hidden');
+      marker.setPopupContent(buildPopup(p, sel || null));
+      visible++;
+    } else {
+      marker.setIcon(fadedIcon);
+      marker.setOpacity(0.25);
+      circle.setStyle({ color: '#30363d', opacity: 0.15, fillColor: '#30363d', fillOpacity: 0.02 });
+      item.classList.add('hidden');
+    }
+  });
+
+  countEl.textContent = visible;
+  noRes.style.display = visible === 0 ? 'block' : 'none';
+}
+
+let userMarker = null, userCircle = null;
+
+async function searchCEP() {
+  const raw = document.getElementById('cep-input').value.replace(/\D/g,'');
+  const statusEl = document.getElementById('cep-status');
+  const btn = document.querySelector('button.primary');
+  if (raw.length !== 8) { statusEl.textContent = 'CEP inválido. Use 8 dígitos.'; statusEl.className = 'err'; return; }
+  btn.disabled = true;
+  statusEl.textContent = 'Consultando ViaCEP...';
+  statusEl.className = 'loading';
+  try {
+    const r1 = await fetch(`https://viacep.com.br/ws/${raw}/json/`);
+    const d1 = await r1.json();
+    if (d1.erro) throw new Error('CEP não encontrado.');
+    const city = d1.localidade, uf = d1.uf, log = d1.logradouro || '';
+    statusEl.textContent = `Geocodificando ${city}/${uf}...`;
+    const q = encodeURIComponent(`${log || city}, ${city}, ${uf}, Brasil`);
+    const r2 = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&countrycodes=br`, { headers: { 'User-Agent': 'supply-map/1.0' } });
+    const d2 = await r2.json();
+    if (!d2.length) throw new Error('Não foi possível geocodificar.');
+    const lat = parseFloat(d2[0].lat), lon = parseFloat(d2[0].lon);
+    if (userMarker) map.removeLayer(userMarker);
+    if (userCircle) map.removeLayer(userCircle);
+    userMarker = L.marker([lat, lon], { icon: userIcon }).addTo(map);
+    userMarker.bindPopup(`<div style="font-family:'Courier New',monospace;font-size:12px;line-height:1.6;background:#0d1117;color:#c9d1d9;padding:4px 6px;border-radius:4px;">
+      <b style="color:#ffa657;">PIN BUSCADO</b><br>${d1.cep||raw}<br>${log?log+', ':''}${city}/${uf}</div>`,
+      { className: 'dark-popup' }).openPopup();
+    map.flyTo([lat, lon], 10, { duration: 1 });
+    statusEl.textContent = `✓ ${city}/${uf} — (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+    statusEl.className = 'ok';
+  } catch(e) {
+    statusEl.textContent = e.message || 'Erro ao buscar CEP.';
+    statusEl.className = 'err';
+  }
+  btn.disabled = false;
+}
+
+document.getElementById('cep-input').addEventListener('keydown', e => { if (e.key==='Enter') searchCEP(); });
+document.getElementById('cep-input').addEventListener('input', e => {
+  let v = e.target.value.replace(/\D/g,'');
+  if (v.length > 5) v = v.slice(0,5)+'-'+v.slice(5,8);
+  e.target.value = v;
+});
+
+const s = document.createElement('style');
+s.textContent = `.dark-popup .leaflet-popup-content-wrapper{background:#0d1117;border:1px solid #30363d;border-radius:6px;box-shadow:none;padding:0}.dark-popup .leaflet-popup-tip{background:#0d1117}.dark-popup .leaflet-popup-content{margin:8px 12px}`;
+document.head.appendChild(s);
+</script>
+</body>
+</html>
